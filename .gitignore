@@ -1,0 +1,14 @@
+# Nunca versione credenciais de servidor
+.env
+.env.*
+*service_role*
+*service-role*
+
+# Sistema operacional / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Backups locais exportados pelo sistema
+*backup*.json
