@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Migrar backup para o Supabase</title>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="./assets/estilo.css">
+<style>
+  body{padding:0}
+  .pg{max-width:760px;margin:0 auto;padding:28px 16px 64px}
+  .passo{counter-increment:p}
+  .passo h3::before{content:counter(p) ". ";color:var(--accent)}
+  .pg{counter-reset:p}
+  #log{font-family:var(--mono);font-size:12px;background:var(--surface-2);border:1px solid var(--line);
+       border-radius:var(--r);padding:10px;max-height:300px;overflow:auto;white-space:pre-wrap}
+</style>
+</head>
+<body>
+<div class="pg">
+  <div style="display:flex;gap:10px;align-items:flex-start;margin-bottom:6px">
+    <i style="width:6px;align-self:stretch;min-height:38px;background:var(--accent);border-radius:2px;display:block"></i>
+    <div><h1 style="font-family:var(--disp);font-size:27px;text-transform:uppercase;letter-spacing:.02em;line-height:1">Migrar para o Supabase</h1>
+    <p class="fine" style="margin:4px 0 0">Leva o backup JSON do sistema atual para o banco novo. Rode uma vez só, logado como administrador.</p></div>
+  </div>
+
+  <div class="panel passo" style="margin-top:20px"><header><h3>Entrar como administrador</h3></header>
+    <div class="pad grid" id="bxLogin">
+      <div class="grid g2">
+        <label class="f">E-mail<input id="em" type="email" autocomplete="username"></label>
+        <label class="f">Senha<input id="pw" type="password" autocomplete="current-password"></label>
+      </div>
+      <div style="display:flex;justify-content:flex-end"><button class="btn pri" id="btLogin">Entrar</button></div>
+      <div class="fine" id="quem"></div>
+    </div>
+  </div>
+
+  <div class="panel passo" style="margin-top:16px"><header><h3>Escolher o arquivo de backup</h3></header>
+    <div class="pad grid">
+      <p class="fine" style="margin:0">No sistema atual, vá em <b>Ajustes › Baixar backup completo (JSON)</b> e selecione o arquivo aqui.</p>
+      <input type="file" id="arq" accept="application/json,.json">
+      <div class="fine" id="resumo"></div>
+    </div>
+  </div>
+
+  <div class="panel passo" style="margin-top:16px"><header><h3>Importar</h3></header>
+    <div class="pad grid">
+      <label class="f" style="flex-direction:row;align-items:center;gap:8px;text-transform:none;letter-spacing:0;font-size:13px">
+        <input type="checkbox" id="comHist" checked style="width:auto"> Trazer também o histórico de movimentações
+      </label>
+      <div class="note">A importação não apaga nada: itens com código já existente são pulados. Se algo der errado no meio, dá para rodar de novo.</div>
+      <div style="display:flex;justify-content:flex-end"><button class="btn pri" id="btGo" disabled>Importar para o Supabase</button></div>
+      <div id="log">aguardando…</div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="./assets/config.js"></script>
+<script>
+"use strict";
+const $=s=>document.querySelector(s);
+const SB=window.supabase.createClient(window.APP_CONFIG.url,window.APP_CONFIG.anonKey);
+let dados=null, pronto=false;
+const log=t=>{const l=$("#log");l.textContent+=(l.textContent==="aguardando…"?"":"\n")+t;if(l.textContent.startsWith("aguardando…\n"))l.textContent=l.textContent.slice(12);l.scrollTop=l.scrollHeight;};
+
+async function estado(){
+  const {data:{session}}=await SB.auth.getSession();
+  if(!session){$("#quem").textContent="Não conectado.";return;}
+  const {data:p}=await SB.from("perfis").select("*").eq("id",session.user.id).maybeSingle();
+  $("#quem").innerHTML=p?("Conectado como <b>"+p.nome+"</b> · perfil "+p.papel+(p.papel==="admin"?"":" — <b>só o perfil admin importa</b>")):"Sem perfil no almoxarifado.";
+  pronto=!!(p&&p.papel==="admin");
+  $("#btGo").disabled=!(pronto&&dados);
+}
+$("#btLogin").onclick=async()=>{
+  const {error}=await SB.auth.signInWithPassword({email:$("#em").value.trim(),password:$("#pw").value});
+  if(error){$("#quem").textContent="Erro: "+error.message;return;}
+  estado();
+};
+$("#arq").onchange=e=>{
+  const f=e.target.files[0];if(!f)return;
+  const r=new FileReader();
+  r.onload=()=>{
+    try{
+      dados=JSON.parse(r.result);
+      $("#resumo").innerHTML="Backup de "+(dados.geradoEm||"data desconhecida").slice(0,10)+" — "
+        +(dados.itens||[]).length+" itens, "+(dados.frota||[]).length+" equipamentos, "
+        +(dados.fornecedores||[]).length+" fornecedores, "+(dados.ferramentas||[]).length+" ferramentas, "
+        +contarMovs(dados)+" movimentações.";
+      $("#btGo").disabled=!pronto;
+    }catch(err){dados=null;$("#resumo").textContent="Arquivo inválido: "+err.message;}
+  };
+  r.readAsText(f);
+};
+function contarMovs(d){
+  if(Array.isArray(d.movimentos)&&d.movimentos.length&&d.movimentos[0].registros)
+    return d.movimentos.reduce((s,b)=>s+(b.registros||[]).length,0);
+  return (d.movimentos||[]).length;
+}
+function listaMovs(d){
+  if(Array.isArray(d.movimentos)&&d.movimentos.length&&d.movimentos[0].registros){
+    const o=[];for(const b of d.movimentos)for(const r of (b.registros||[]))o.push(r);
+    return o.sort((a,b)=>String(a.data).localeCompare(String(b.data)));
+  }
+  return (d.movimentos||[]).slice().sort((a,b)=>String(a.data).localeCompare(String(b.data)));
+}
+
+$("#btGo").onclick=async()=>{
+  $("#btGo").disabled=true;$("#log").textContent="";
+  const num=v=>{const n=Number(v);return isFinite(n)?n:0;};
+  try{
+    // Fornecedores
+    for(const f of (dados.fornecedores||[])){
+      const {error}=await SB.from("fornecedores").upsert({nome:f.nome,cnpj:f.cnpj||null,contato:f.contato||null,
+        telefone:f.telefone||null,email:f.email||null,obs:f.obs||null,exemplo:!!f.exemplo},{onConflict:"nome"});
+      if(error)log("fornecedor "+f.nome+": "+error.message);
+    }
+    log((dados.fornecedores||[]).length+" fornecedor(es) processado(s).");
+
+    // Frota
+    for(const f of (dados.frota||[])){
+      const {error}=await SB.from("frota").upsert({codigo:f.codigo,tipo:f.tipo||null,marca_modelo:f.marcaModelo||null,
+        placa:f.placa||null,ano:f.ano||null,local:f.local||null,ativo:f.ativo!==false,exemplo:!!f.exemplo},{onConflict:"codigo"});
+      if(error)log("frota "+f.codigo+": "+error.message);
+    }
+    log((dados.frota||[]).length+" equipamento(s) processado(s).");
+
+    // Ferramentas
+    for(const f of (dados.ferramentas||[])){
+      const {error}=await SB.from("ferramentas").upsert({codigo:f.codigo,descricao:f.descricao,marca:f.marca||null,
+        patrimonio:f.patrimonio||null,quantidade:Math.round(num(f.quantidade)),local:f.local||null,obs:f.obs||null,
+        exemplo:!!f.exemplo},{onConflict:"codigo"});
+      if(error)log("ferramenta "+f.codigo+": "+error.message);
+    }
+    log((dados.ferramentas||[]).length+" ferramenta(s) processada(s).");
+
+    // Itens (com saldo e custo já calculados)
+    let n=0;
+    for(const i of (dados.itens||[])){
+      const {error}=await SB.rpc("importar_item",{p_codigo:i.codigo,p_descricao:i.descricao,p_categoria:i.categoria||null,
+        p_unidade:i.unidade||"UN",p_local:i.local||null,p_min:num(i.estoqueMin),p_max:num(i.estoqueMax),
+        p_saldo:num(i.saldo),p_custo:num(i.custoMedio),p_aplicacao:i.aplicacao||null,p_fornecedor:i.fornecedor||null,
+        p_ativo:i.ativo!==false});
+      if(error)log("item "+i.codigo+": "+error.message); else n++;
+      if(n%25===0)log(n+" itens…");
+    }
+    log(n+" item(ns) importado(s) com saldo e custo médio.");
+
+    // Histórico
+    if($("#comHist").checked){
+      const movs=listaMovs(dados);let m=0;
+      for(const mv of movs){
+        const {error}=await SB.rpc("importar_movimento",{p_mov:mv});
+        if(error)log("movimento "+mv.codigo+" "+mv.data+": "+error.message); else m++;
+        if(m%100===0)log(m+" movimentações…");
+      }
+      log(m+" movimentação(ões) importada(s).");
+    }
+
+    // Empréstimos de ferramenta
+    const emps=(dados.emprestimos||[]);
+    const lista=(emps.length&&emps[0].registros)?emps.flatMap(b=>b.registros||[]):emps;
+    if(lista.length){
+      const {data:ferr}=await SB.from("ferramentas").select("id,codigo");
+      const porCod={};(ferr||[]).forEach(f=>porCod[f.codigo]=f.id);
+      let e2=0;
+      for(const e of lista){
+        if(!porCod[e.codigo]){log("empréstimo sem ferramenta: "+e.codigo);continue;}
+        const {error}=await SB.from("emprestimos").insert({ferramenta_id:porCod[e.codigo],codigo:e.codigo,
+          descricao:e.descricao||null,qtd:Math.round(num(e.qtd))||1,retirado_em:e.retiradoEm,previsao:e.previsao||null,
+          retirado_por:e.retiradoPor||"—",os:e.os||null,frota:e.frota||null,obs:e.obs||null,situacao:e.situacao||"aberto",
+          devolvido_em:e.devolvidoEm||null,recebido_por:e.recebidoPor||null,motivo:e.motivo||null,
+          obs_devolucao:e.obsDevolucao||null,usuario_nome:e.usuario||null,exemplo:!!e.exemplo});
+        if(error)log("empréstimo "+e.codigo+": "+error.message); else e2++;
+      }
+      log(e2+" retirada(s) de ferramenta importada(s).");
+    }
+
+    // Configuração
+    if(dados.config){
+      const c=dados.config;
+      const {error}=await SB.from("config").upsert({id:1,empresa:c.empresa||"",obra:c.obra||"",
+        categorias:c.categorias||[],unidades:c.unidades||[],locais:c.locais||[],tipos_frota:c.tiposFrota||[]});
+      if(error)log("config: "+error.message); else log("Configuração atualizada.");
+    }
+
+    log("--- Importação concluída. Abra o sistema e confira o Painel. ---");
+  }catch(err){
+    log("ERRO: "+(err.message||err));
+  }
+  $("#btGo").disabled=false;
+};
+estado();
+</script>
+</body>
+</html>
