@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Almoxarifado da Oficina</title>
+<meta name="description" content="Controle de estoque, requisições por ordem de serviço e ferramentas emprestadas da oficina de manutenção.">
+<meta name="theme-color" content="#14495C">
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="icon" type="image/png" href="./assets/icone.png">
+<link rel="apple-touch-icon" href="./assets/marca.png">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="./assets/estilo.css">
+</head>
+<body>
+
+<div id="raiz">
+  <div class="login"><div class="box"><div class="mark"><i></i><div><h1>Almoxarifado<small>Oficina de manutenção</small></h1></div></div>
+  <div class="panel pad">Carregando…</div></div></div>
+</div>
+
+<div id="modal"></div>
+<div id="toasts" aria-live="polite"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="./assets/config.js"></script>
+<script src="./assets/app.js"></script>
+</body>
+</html>

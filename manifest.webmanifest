@@ -1,0 +1,26 @@
+{
+  "name": "Almoxarifado da Oficina",
+  "short_name": "Almoxarifado",
+  "description": "Controle de estoque, requisições por ordem de serviço e ferramentas emprestadas da oficina de manutenção.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#EDF1F2",
+  "theme_color": "#14495C",
+  "lang": "pt-BR",
+  "icons": [
+    {
+      "src": "./assets/icone.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "./assets/marca.png",
+      "sizes": "180x180",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}
